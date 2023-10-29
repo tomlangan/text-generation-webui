@@ -1,3 +1,4 @@
+import html
 import json
 
 import requests
@@ -15,6 +16,7 @@ def run(user_input, history):
         'user_input': user_input,
         'max_new_tokens': 250,
         'auto_max_new_tokens': False,
+        'max_tokens_second': 0,
         'history': history,
         'mode': 'instruct',  # Valid options: 'chat', 'chat-instruct', 'instruct'
         'character': 'Example',
@@ -44,6 +46,8 @@ def run(user_input, history):
         'tfs': 1,
         'top_a': 0,
         'repetition_penalty': 1.18,
+        'presence_penalty': 0,
+        'frequency_penalty': 0,
         'repetition_penalty_range': 0,
         'top_k': 40,
         'min_length': 0,
@@ -55,6 +59,7 @@ def run(user_input, history):
         'mirostat_mode': 0,
         'mirostat_tau': 5,
         'mirostat_eta': 0.1,
+        'grammar_string': '',
         'guidance_scale': 1,
         'negative_prompt': '',
 
@@ -62,6 +67,7 @@ def run(user_input, history):
         'add_bos_token': True,
         'truncation_length': 2048,
         'ban_eos_token': False,
+        'custom_token_bans': '',
         'skip_special_tokens': True,
         'stopping_strings': []
     }
@@ -72,7 +78,7 @@ def run(user_input, history):
         result = response.json()['results'][0]['history']
         print(json.dumps(result, indent=4))
         print()
-        print(result['visible'][-1][1])
+        print(html.unescape(result['visible'][-1][1]))
 
 
 if __name__ == '__main__':
