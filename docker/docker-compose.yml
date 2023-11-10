@@ -1,6 +1,7 @@
 version: "3.3"
 services:
   text-generation-webui:
+    image: text-generation-webui:latest
     build:
       context: .
       args:
