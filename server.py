@@ -9,6 +9,7 @@ os.environ['GRADIO_ANALYTICS_ENABLED'] = 'False'
 os.environ['BITSANDBYTES_NOWELCOME'] = '1'
 warnings.filterwarnings('ignore', category=UserWarning, message='TypedStorage is deprecated')
 warnings.filterwarnings('ignore', category=UserWarning, message='Using the update method is deprecated')
+warnings.filterwarnings('ignore', category=UserWarning, message='Field "model_name" has conflict')
 
 with RequestBlocker():
     import gradio as gr
@@ -216,8 +217,7 @@ if __name__ == "__main__":
             model_name = shared.model_name
 
         model_settings = get_model_metadata(model_name)
-        shared.settings.update({k: v for k, v in model_settings.items() if k in shared.settings})  # hijacking the interface defaults
-        update_model_parameters(model_settings, initial=True)  # hijacking the command-line arguments
+        update_model_parameters(model_settings, initial=True)  # hijack the command-line arguments
 
         # Load the model
         shared.model, shared.tokenizer = load_model(model_name)
@@ -226,13 +226,19 @@ if __name__ == "__main__":
 
     shared.generation_lock = Lock()
 
-    # Launch the web UI
-    create_interface()
-    while True:
-        time.sleep(0.5)
-        if shared.need_restart:
-            shared.need_restart = False
+    if shared.args.nowebui:
+        # Start the API in standalone mode
+        shared.args.extensions = [x for x in shared.args.extensions if x != 'gallery']
+        if shared.args.extensions is not None and len(shared.args.extensions) > 0:
+            extensions_module.load_extensions()
+    else:
+        # Launch the web UI
+        create_interface()
+        while True:
             time.sleep(0.5)
-            shared.gradio['interface'].close()
-            time.sleep(0.5)
-            create_interface()
+            if shared.need_restart:
+                shared.need_restart = False
+                time.sleep(0.5)
+                shared.gradio['interface'].close()
+                time.sleep(0.5)
+                create_interface()

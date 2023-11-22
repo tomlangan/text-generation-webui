@@ -81,7 +81,7 @@ def generate_chat_prompt(user_input, state, **kwargs):
     # Find the maximum prompt size
     max_length = get_max_prompt_length(state)
     all_substrings = {
-        'chat': get_turn_substrings(state, instruct=False),
+        'chat': get_turn_substrings(state, instruct=False) if state['mode'] in ['chat', 'chat-instruct'] else None,
         'instruct': get_turn_substrings(state, instruct=True)
     }
 
@@ -91,7 +91,13 @@ def generate_chat_prompt(user_input, state, **kwargs):
     if state['mode'] == 'chat-instruct':
         wrapper = ''
         command = state['chat-instruct_command'].replace('<|character|>', state['name2'] if not impersonate else state['name1'])
-        wrapper += state['context_instruct']
+        context_instruct = state['context_instruct']
+        if state['custom_system_message'].strip() != '':
+            context_instruct = context_instruct.replace('<|system-message|>', state['custom_system_message'])
+        else:
+            context_instruct = context_instruct.replace('<|system-message|>', state['system_message'])
+
+        wrapper += context_instruct
         wrapper += all_substrings['instruct']['user_turn'].replace('<|user-message|>', command)
         wrapper += all_substrings['instruct']['bot_turn_stripped']
         if impersonate:
@@ -106,6 +112,10 @@ def generate_chat_prompt(user_input, state, **kwargs):
 
     if is_instruct:
         context = state['context_instruct']
+        if state['custom_system_message'].strip() != '':
+            context = context.replace('<|system-message|>', state['custom_system_message'])
+        else:
+            context = context.replace('<|system-message|>', state['system_message'])
     else:
         context = replace_character_names(
             f"{state['context'].strip()}\n",
@@ -237,7 +247,10 @@ def chatbot_wrapper(text, state, regenerate=False, _continue=False, loading_mess
     for j, reply in enumerate(generate_reply(prompt, state, stopping_strings=stopping_strings, is_chat=True)):
 
         # Extract the reply
-        visible_reply = re.sub("(<USER>|<user>|{{user}})", state['name1'], reply)
+        visible_reply = reply
+        if state['mode'] in ['chat', 'chat-instruct']:
+            visible_reply = re.sub("(<USER>|<user>|{{user}})", state['name1'], reply)
+
         visible_reply = html.escape(visible_reply)
 
         if shared.stop_everything:
@@ -532,15 +545,19 @@ def generate_pfp_cache(character):
 
     for path in [Path(f"characters/{character}.{extension}") for extension in ['png', 'jpg', 'jpeg']]:
         if path.exists():
-            img = make_thumbnail(Image.open(path))
-            img.save(Path('cache/pfp_character.png'), format='PNG')
-            return img
+            original_img = Image.open(path)
+            original_img.save(Path('cache/pfp_character.png'), format='PNG')
+
+            thumb = make_thumbnail(original_img)
+            thumb.save(Path('cache/pfp_character_thumb.png'), format='PNG')
+
+            return thumb
 
     return None
 
 
 def load_character(character, name1, name2, instruct=False):
-    context = greeting = turn_template = ""
+    context = greeting = turn_template = system_message = ""
     greeting_field = 'greeting'
     picture = None
 
@@ -563,8 +580,9 @@ def load_character(character, name1, name2, instruct=False):
     file_contents = open(filepath, 'r', encoding='utf-8').read()
     data = json.loads(file_contents) if extension == "json" else yaml.safe_load(file_contents)
 
-    if Path("cache/pfp_character.png").exists() and not instruct:
-        Path("cache/pfp_character.png").unlink()
+    for path in [Path("cache/pfp_character.png"), Path("cache/pfp_character_thumb.png")]:
+        if path.exists() and not instruct:
+            path.unlink()
 
     picture = generate_pfp_cache(character)
 
@@ -588,13 +606,11 @@ def load_character(character, name1, name2, instruct=False):
         context = build_pygmalion_style_context(data)
         greeting_field = 'char_greeting'
 
-    if greeting_field in data:
-        greeting = data[greeting_field]
+    greeting = data.get(greeting_field, greeting)
+    turn_template = data.get('turn_template', turn_template)
+    system_message = data.get('system_message', system_message)
 
-    if 'turn_template' in data:
-        turn_template = data['turn_template']
-
-    return name1, name2, picture, greeting, context, turn_template.replace("\n", r"\n")
+    return name1, name2, picture, greeting, context, turn_template.replace("\n", r"\n"), system_message
 
 
 @functools.cache
@@ -691,12 +707,13 @@ def generate_character_yaml(name, greeting, context):
     return yaml.dump(data, sort_keys=False, width=float("inf"))
 
 
-def generate_instruction_template_yaml(user, bot, context, turn_template):
+def generate_instruction_template_yaml(user, bot, context, turn_template, system_message):
     data = {
         'user': user,
         'bot': bot,
         'turn_template': turn_template,
         'context': context,
+        'system_message': system_message,
     }
 
     data = {k: v for k, v in data.items() if v}  # Strip falsy

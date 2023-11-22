@@ -6,6 +6,7 @@ import torch
 from exllamav2 import (
     ExLlamaV2,
     ExLlamaV2Cache,
+    ExLlamaV2Cache_8bit,
     ExLlamaV2Config,
     ExLlamaV2Tokenizer
 )
@@ -46,6 +47,7 @@ class Exllamav2Model:
         config.max_seq_len = shared.args.max_seq_len
         config.scale_pos_emb = shared.args.compress_pos_emb
         config.scale_alpha_value = shared.args.alpha_value
+        config.no_flash_attn = shared.args.no_flash_attn
 
         model = ExLlamaV2(config)
 
@@ -56,7 +58,11 @@ class Exllamav2Model:
         model.load(split)
 
         tokenizer = ExLlamaV2Tokenizer(config)
-        cache = ExLlamaV2Cache(model)
+        if shared.args.cache_8bit:
+            cache = ExLlamaV2Cache_8bit(model)
+        else:
+            cache = ExLlamaV2Cache(model)
+
         generator = ExLlamaV2BaseGenerator(model, cache, tokenizer)
 
         result = self()
@@ -90,7 +96,12 @@ class Exllamav2Model:
         settings.temperature = state['temperature']
         settings.top_k = state['top_k']
         settings.top_p = state['top_p']
+        settings.min_p = state['min_p']
+        settings.tfs = state['tfs']
         settings.typical = state['typical_p']
+        settings.mirostat = state['mirostat_mode'] == 2
+        settings.mirostat_tau = state['mirostat_tau']
+        settings.mirostat_eta = state['mirostat_eta']
         settings.token_repetition_penalty = state['repetition_penalty']
         settings.token_repetition_range = -1 if state['repetition_penalty_range'] <= 0 else state['repetition_penalty_range']
         if state['ban_eos_token']:
