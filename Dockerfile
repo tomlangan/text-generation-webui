@@ -1,1 +1,1 @@
-docker/Dockerfile
+docker/nvidia/Dockerfile
