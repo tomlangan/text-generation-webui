@@ -19,12 +19,21 @@ try:
 except:
     llama_cpp_cuda = None
 
+try:
+    import llama_cpp_cuda_tensorcores
+except:
+    llama_cpp_cuda_tensorcores = None
+
 
 def llama_cpp_lib():
-    if (shared.args.cpu and llama_cpp is not None) or llama_cpp_cuda is None:
+    if shared.args.cpu and llama_cpp is not None:
         return llama_cpp
-    else:
+    elif shared.args.tensorcores and llama_cpp_cuda_tensorcores is not None:
+        return llama_cpp_cuda_tensorcores
+    elif llama_cpp_cuda is not None:
         return llama_cpp_cuda
+    else:
+        return llama_cpp
 
 
 def ban_eos_logits_processor(eos_token, input_ids, logits):
@@ -46,7 +55,7 @@ class LlamaCppModel:
         self.grammar = None
 
     def __del__(self):
-        self.model.__del__()
+        del self.model
 
     @classmethod
     def from_pretrained(self, path):
@@ -64,7 +73,8 @@ class LlamaCppModel:
             else:
                 cache_capacity = int(shared.args.cache_capacity)
 
-        logger.info("Cache capacity is " + str(cache_capacity) + " bytes")
+        if cache_capacity > 0:
+            logger.info("Cache capacity is " + str(cache_capacity) + " bytes")
 
         if shared.args.tensor_split is None or shared.args.tensor_split.strip() == '':
             tensor_split_list = None
@@ -85,6 +95,7 @@ class LlamaCppModel:
             'rope_freq_base': RoPE.get_rope_freq_base(shared.args.alpha_value, shared.args.rope_freq_base),
             'tensor_split': tensor_split_list,
             'rope_freq_scale': 1.0 / shared.args.compress_pos_emb,
+            'offload_kqv': not shared.args.no_offload_kqv
         }
 
         result.model = Llama(**params)
@@ -104,6 +115,7 @@ class LlamaCppModel:
         return self.model.detokenize(ids).decode('utf-8')
 
     def get_logits(self, tokens):
+        self.model.reset()
         self.model.eval(tokens)
         logits = self.model._scores
         logits = np.expand_dims(logits, 0)  # batch dim is expected
@@ -118,9 +130,7 @@ class LlamaCppModel:
                 self.grammar = None
 
     def generate(self, prompt, state, callback=None):
-
         LogitsProcessorList = llama_cpp_lib().LogitsProcessorList
-
         prompt = prompt if type(prompt) is str else prompt.decode()
 
         # Handle truncation
@@ -163,6 +173,7 @@ class LlamaCppModel:
         for completion_chunk in completion_chunks:
             if shared.stop_everything:
                 break
+
             text = completion_chunk['choices'][0]['text']
             output += text
             if callback:
