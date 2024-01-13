@@ -50,6 +50,7 @@ COPY --chown=app:app_grp . /home/app/text-generation-webui
 RUN umask 0002 && \
     chmod g+rwX /home/app/text-generation-webui && \
     pip3 install --global --no-build-isolation --no-cache --no-index ./*.whl && \
+    pip install jinja2==3.1.2 && \
     rm -r /home/app/wheels
 WORKDIR /home/app/text-generation-webui
 EXPOSE ${CONTAINER_PORT:-7860} ${CONTAINER_API_PORT:-5000} ${CONTAINER_API_STREAM_PORT:-5005}
