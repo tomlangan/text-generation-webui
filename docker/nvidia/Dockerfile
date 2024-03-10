@@ -53,6 +53,6 @@ RUN umask 0002 && \
     pip install jinja2==3.1.2 && \
     rm -r /home/app/wheels
 WORKDIR /home/app/text-generation-webui
-EXPOSE ${CONTAINER_PORT:-7860} ${CONTAINER_API_PORT:-5000} ${CONTAINER_API_STREAM_PORT:-5005}
+EXPOSE ${CONTAINER_PORT:-7860} ${CONTAINER_API_PORT:-5000}
 # set umask to ensure group read / write at runtime
 CMD umask 0002 && export HOME=/home/app && python3 server.py ${CLI_ARGS}
